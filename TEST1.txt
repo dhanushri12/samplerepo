@@ -1,1 +1,235 @@
-changed
+CREATE DATABASE student_system;
+CREATE TABLE stus(
+	id SERIAL PRIMARY KEY,
+	name VARCHAR(50),
+	course VARCHAR(40),
+	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);
+	
+CREATE TABLE student_logs(
+	log_id SERIAL PRIMARY KEY,
+	student_id INT,
+	old_name VARCHAR(40),
+	old_course VARCHAR(50),
+	action VARCHAR(40),
+	action_time TIMESTAMP
+);
+
+INSERT INTO stus(name,course)
+	VALUES
+	
+	('rahul','ml'),
+	('karthik','ds'),
+	('yathav','da');
+
+CREATE FUNCTION log_student_update()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+	INSERT INTO student_logs(student_id,old_name,old_course,action)
+	VALUES(OLD.id,OLD.name,OLD.course,'UPDATE');
+	RETURN NEW;
+	END;
+	$$;
+
+CREATE TRIGGER trg_student_update
+BEFORE UPDATE ON stus
+FOR EACH ROW
+EXECUTE FUNCTION log_student_update();
+
+UPDATE stus SET course = 'bootcamp in c'
+where name = 'yathav';
+
+CREATE FUNCTION log_student_delete()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+ AS $$
+ 	BEGIN
+	 	 INSERT INTO student_logs
+		  (student_id,old_name,old_course,action)
+		  VALUES(OLD.id,OLD.name,OLD.course,'DELETE');
+RETURN OLD;
+END;
+$$;
+
+CREATE TRIGGER trg_student_delete
+BEFORE DELETE ON stus
+FOR EACH ROW
+EXECUTE FUNCTION log_student_delete();
+
+-- transaction control
+BEGIN;
+	UPDATE stus SET course ='ml' WHERE id =2;
+	-- IF CORRECT
+
+COMMIT;
+	--if something  wrong
+
+
+CREATE OR REPLACE FUNCTION get_student_count(course_name TEXT)
+RETURNS INT
+LANGUAGE plpgsql
+AS $$
+DECLARE 
+    total INT;
+BEGIN
+    SELECT COUNT(*) 
+    INTO total 
+    FROM stus 
+    WHERE course = course_name;
+
+    RETURN total;
+END;
+$$;
+
+CREATE INDEX idx_course ON stus(course);
+
+INSERT INTO stus(name, course) VALUES ('Arun','AI');
+
+UPDATE stus SET course='ML' WHERE id=2;
+
+SELECT * FROM student_logs;
+
+ALTER TABLE student_logs
+ADD COLUMN new_name TEXT,
+ADD COLUMN new_course TEXT;
+
+
+CREATE OR REPLACE FUNCTION log_student_update()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    INSERT INTO student_logs(
+        student_id,
+        old_name,
+        old_course,
+        new_name,
+        new_course,
+        action
+    )
+    VALUES (
+        OLD.id,
+        OLD.name,
+        OLD.course,
+        NEW.name,
+        NEW.course,
+        'UPDATE'
+    );
+
+    RETURN NEW;
+END;
+$$;
+
+UPDATE stus
+SET course = 'AI'
+WHERE id = 1;
+
+SELECT 
+    student_id,
+    old_course,
+    new_course
+FROM student_logs
+WHERE action = 'UPDATE';
+
+SELECT 
+    student_id,
+    old_name,
+    new_name,
+    old_course,
+    new_course
+FROM student_logs
+WHERE old_name IS DISTINCT FROM new_name
+   OR old_course IS DISTINCT FROM new_course;
+
+SELECT 
+    student_id,
+    old_course || ' → ' || new_course AS course_change,
+    action_time
+FROM student_logs
+WHERE action = 'UPDATE';
+
+CREATE OR REPLACE PROCEDURE manage_student(
+	p_id INT,
+	P_name TEXT,
+	p_course TEXT
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+	IF EXISTS ( SELECT 1 FROM stus WHERE id =p_id)THEN
+		UPDATE stus
+	SET name = p_name,
+	course = p_course
+		WHERE id =p_id;
+	ELSE
+		INSERT INTO stus(id,name,course)
+		VALUES (p_id,p_name,p_course);
+	END IF;
+END;
+$$;
+
+CALL manage_student(1,'rahul','ai');
+CALL manage_student(4,'yathav','ml');
+
+SELECT * FROM stus;
+	
+SELECT * FROM student_logs;
+CALL manage_student(2, 'Karthik', 'AI');
+
+CREATE OR REPLACE PROCEDURE update_multiple_courses()
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    r RECORD;
+BEGIN
+    FOR r IN SELECT id, course FROM stus LOOP
+        CALL manage_student(r.id, r.id || '_updated', r.course || '_new');
+    END LOOP;
+END;
+$$;
+
+CALL update_multiple_courses();
+SELECT * FROM stus;
+
+SELECT * FROM student_logs
+WHERE action ='UPDATE';
+
+CREATE OR REPLACE PROCEDURE update_selected_courses(target_course TEXT)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+ r RECORD;
+BEGIN
+	FOR r IN SELECT id,course FROM stus WHERE course = target_course LOOP
+		CALL manage_student (r.id,r.id || '_updated',r.course || '_new');
+	  END LOOP;
+	  END;
+	  $$;
+
+CALL update_selected_courses('ml');
+
+SELECT get_student_count('ML');
+
+SELECT * FROM student_logs WHERE action='UPDATE';
+
+SELECT * FROM student_logs;
+SELECT student_id, old_name, new_name, old_course, new_course
+FROM student_logs
+WHERE action='UPDATE';
+
+SELECT get_student_count('ML');
+
+SELECT * FROM student_logs
+WHERE old_course IS DISTINCT FROM new_course;
+
+SELECT proname FROM pg_proc;
+
+SELECT * FROM information_schema.triggers;
+
+SELECT 
+    old_course || ' → ' || new_course AS change
+FROM student_logs;
+
+SELECT * FROM  information_schema.triggers ;
+
